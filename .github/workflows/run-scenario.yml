@@ -8,7 +8,7 @@ on:
 
 jobs:
   run:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     if: github.event.repository.fork == true || github.ref != 'refs/heads/main'
     permissions:
       contents: write
