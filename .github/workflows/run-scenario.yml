@@ -9,6 +9,7 @@ on:
 jobs:
   run:
     runs-on: self-hosted
+    timeout-minutes: 4320
     if: github.event.repository.fork == true || github.ref != 'refs/heads/main'
     permissions:
       contents: write
