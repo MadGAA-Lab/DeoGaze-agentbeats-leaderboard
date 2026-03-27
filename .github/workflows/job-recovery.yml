@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       unique_name:
-        description: 'Unique name of the submission to recover (e.g. MadGAA-Lab-20260327-125621)'
+        description: 'Unique name to recover (leave blank to auto-detect latest result)'
         required: false
         default: ''
 
@@ -26,32 +26,47 @@ jobs:
         run: |
           if [ -n "${{ github.event.inputs.unique_name }}" ]; then
             UNIQUE_NAME="${{ github.event.inputs.unique_name }}"
+            echo "Using provided unique name: $UNIQUE_NAME"
           else
-            TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-            UNIQUE_NAME="${{ github.repository_owner }}-${TIMESTAMP}"
+            # Auto-detect: pick the latest result file by modification time
+            LATEST=$(ls -t results/*.json 2>/dev/null | head -1)
+            if [ -z "$LATEST" ]; then
+              echo "Error: No result files found in results/"
+              ls results/ || echo "(empty)"
+              exit 1
+            fi
+            # Strip path and .json extension to get unique name
+            UNIQUE_NAME=$(basename "$LATEST" .json)
+            echo "Auto-detected latest result: $UNIQUE_NAME"
           fi
+
+          BRANCH="submission-${UNIQUE_NAME}"
           echo "unique_name=$UNIQUE_NAME" >> $GITHUB_OUTPUT
-          echo "branch_name=submission-${UNIQUE_NAME}" >> $GITHUB_OUTPUT
-          echo "Recovering submission: $UNIQUE_NAME"
+          echo "branch_name=$BRANCH" >> $GITHUB_OUTPUT
 
       - name: Verify result files exist
         run: |
           UNIQUE_NAME="${{ steps.naming.outputs.unique_name }}"
-          if [ ! -f "results/${UNIQUE_NAME}.json" ]; then
-            echo "Error: results/${UNIQUE_NAME}.json not found"
+          echo "Looking for files with unique name: $UNIQUE_NAME"
+
+          MISSING=0
+          for f in "results/${UNIQUE_NAME}.json" \
+                   "submissions/${UNIQUE_NAME}.toml" \
+                   "submissions/${UNIQUE_NAME}.provenance.json"; do
+            if [ ! -f "$f" ]; then
+              echo "Missing: $f"
+              MISSING=1
+            else
+              echo "Found: $f"
+            fi
+          done
+
+          if [ $MISSING -eq 1 ]; then
+            echo ""
             echo "Available results:"
-            ls results/ || echo "(none)"
+            ls results/
             exit 1
           fi
-          if [ ! -f "submissions/${UNIQUE_NAME}.toml" ]; then
-            echo "Error: submissions/${UNIQUE_NAME}.toml not found"
-            exit 1
-          fi
-          if [ ! -f "submissions/${UNIQUE_NAME}.provenance.json" ]; then
-            echo "Error: submissions/${UNIQUE_NAME}.provenance.json not found"
-            exit 1
-          fi
-          echo "All result files verified."
 
       - name: Determine target repository
         id: target
@@ -97,7 +112,11 @@ jobs:
 
       - name: Output PR link
         run: |
-          echo "### Submit your results" >> $GITHUB_STEP_SUMMARY
-          echo "[Click here to open a pull request](https://github.com/${{ steps.target.outputs.repo }}/compare/main...${{ github.repository_owner }}:${{ github.event.repository.name }}:${{ steps.naming.outputs.branch_name }}?expand=1)" >> $GITHUB_STEP_SUMMARY
+          echo "### ✅ Submission Ready" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "⚠️ When creating the PR, UNCHECK 'Allow edits and access to secrets by maintainers' to protect your secrets." >> $GITHUB_STEP_SUMMARY
+          echo "**Unique name:** ${{ steps.naming.outputs.unique_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch:** ${{ steps.naming.outputs.branch_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "[👉 Click here to open a Pull Request](https://github.com/${{ steps.target.outputs.repo }}/compare/main...${{ github.repository_owner }}:${{ github.event.repository.name }}:${{ steps.naming.outputs.branch_name }}?expand=1)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "⚠️ When creating the PR, **UNCHECK** 'Allow edits and access to secrets by maintainers' to protect your secrets." >> $GITHUB_STEP_SUMMARY
