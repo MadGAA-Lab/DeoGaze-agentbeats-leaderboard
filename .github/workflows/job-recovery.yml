@@ -1,0 +1,103 @@
+name: Recover Submission
+
+on:
+  workflow_dispatch:
+    inputs:
+      unique_name:
+        description: 'Unique name of the submission to recover (e.g. MadGAA-Lab-20260327-125621)'
+        required: false
+        default: ''
+
+jobs:
+  recover:
+    runs-on: self-hosted
+    timeout-minutes: 30
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout fork main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine unique name
+        id: naming
+        run: |
+          if [ -n "${{ github.event.inputs.unique_name }}" ]; then
+            UNIQUE_NAME="${{ github.event.inputs.unique_name }}"
+          else
+            TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+            UNIQUE_NAME="${{ github.repository_owner }}-${TIMESTAMP}"
+          fi
+          echo "unique_name=$UNIQUE_NAME" >> $GITHUB_OUTPUT
+          echo "branch_name=submission-${UNIQUE_NAME}" >> $GITHUB_OUTPUT
+          echo "Recovering submission: $UNIQUE_NAME"
+
+      - name: Verify result files exist
+        run: |
+          UNIQUE_NAME="${{ steps.naming.outputs.unique_name }}"
+          if [ ! -f "results/${UNIQUE_NAME}.json" ]; then
+            echo "Error: results/${UNIQUE_NAME}.json not found"
+            echo "Available results:"
+            ls results/ || echo "(none)"
+            exit 1
+          fi
+          if [ ! -f "submissions/${UNIQUE_NAME}.toml" ]; then
+            echo "Error: submissions/${UNIQUE_NAME}.toml not found"
+            exit 1
+          fi
+          if [ ! -f "submissions/${UNIQUE_NAME}.provenance.json" ]; then
+            echo "Error: submissions/${UNIQUE_NAME}.provenance.json not found"
+            exit 1
+          fi
+          echo "All result files verified."
+
+      - name: Determine target repository
+        id: target
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PARENT_REPO=$(gh api repos/${{ github.repository }} \
+            --jq '.parent.full_name // "${{ github.repository }}"' 2>/dev/null \
+            || echo "${{ github.repository }}")
+          echo "Target repository: $PARENT_REPO"
+          echo "repo=$PARENT_REPO" >> $GITHUB_OUTPUT
+
+      - name: Create submission branch from upstream main
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git remote add upstream https://github.com/${{ steps.target.outputs.repo }}.git \
+            || git remote set-url upstream https://github.com/${{ steps.target.outputs.repo }}.git
+          git fetch upstream
+
+          git checkout -b ${{ steps.naming.outputs.branch_name }} upstream/main
+
+      - name: Commit result files onto submission branch
+        run: |
+          UNIQUE_NAME="${{ steps.naming.outputs.unique_name }}"
+
+          git checkout main -- results/${UNIQUE_NAME}.json
+          git checkout main -- submissions/${UNIQUE_NAME}.toml
+          git checkout main -- submissions/${UNIQUE_NAME}.provenance.json
+
+          git add results/${UNIQUE_NAME}.json \
+                  submissions/${UNIQUE_NAME}.toml \
+                  submissions/${UNIQUE_NAME}.provenance.json
+
+          git commit -m "Submission: ${UNIQUE_NAME}
+
+          Recovered via manual workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+      - name: Push submission branch to fork
+        run: |
+          git push origin ${{ steps.naming.outputs.branch_name }}
+
+      - name: Output PR link
+        run: |
+          echo "### Submit your results" >> $GITHUB_STEP_SUMMARY
+          echo "[Click here to open a pull request](https://github.com/${{ steps.target.outputs.repo }}/compare/main...${{ github.repository_owner }}:${{ github.event.repository.name }}:${{ steps.naming.outputs.branch_name }}?expand=1)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "⚠️ When creating the PR, UNCHECK 'Allow edits and access to secrets by maintainers' to protect your secrets." >> $GITHUB_STEP_SUMMARY
