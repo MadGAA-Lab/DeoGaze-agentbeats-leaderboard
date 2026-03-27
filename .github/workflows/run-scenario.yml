@@ -96,7 +96,7 @@ jobs:
         env:
             GH_TOKEN: ${{ github.token }}
         run: |
-            PARENT_REPO=$(gh api repos/${{ github.repository }} --jq '.parent.full_name // "${{ github.repository }}"')
+            PARENT_REPO=$(gh api repos/${{ github.repository }} --jq '.parent.full_name // "RDI-Foundation/DeoGaze-agentbeats-leaderboard"' 2>/dev/null || echo "RDI-Foundation/DeoGaze-agentbeats-leaderboard")
             echo "Target repository: $PARENT_REPO"
             echo "repo=$PARENT_REPO" >> $GITHUB_OUTPUT
 
