@@ -23,22 +23,17 @@ jobs:
 
       - name: Check output directory from failed run
         run: |
-          echo "=== Checking output/ directory ==="
-          if [ ! -d "output" ]; then
-            echo "Error: output/ directory does not exist."
-            echo "The failed run may have been cleaned up already."
+          if [ ! -f "_recovery/results.json" ]; then
+            echo "Error: _recovery/results.json not found"
             exit 1
           fi
-          ls -la output/
-          if [ ! -f "output/results.json" ]; then
-            echo "Error: output/results.json not found"
-            exit 1
-          fi
-          if [ ! -f "output/provenance.json" ]; then
-            echo "Error: output/provenance.json not found"
-            exit 1
-          fi
-          echo "output/results.json and output/provenance.json found."
+
+      - name: Copy output files into submission paths
+        run: |
+          UNIQUE_NAME="${{ steps.naming.outputs.unique_name }}"
+          cp _recovery/results.json results/${UNIQUE_NAME}.json
+          cp _recovery/provenance.json submissions/${UNIQUE_NAME}.provenance.json
+          cp scenario.toml submissions/${UNIQUE_NAME}.toml
 
       - name: Determine unique name
         id: naming
