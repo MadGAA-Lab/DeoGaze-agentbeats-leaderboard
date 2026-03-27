@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       unique_name:
-        description: 'Unique name to recover (leave blank to auto-detect latest result)'
+        description: 'Override unique name (leave blank to auto-generate from owner+timestamp)'
         required: false
         default: ''
 
@@ -21,6 +21,25 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Check output directory from failed run
+        run: |
+          echo "=== Checking output/ directory ==="
+          if [ ! -d "output" ]; then
+            echo "Error: output/ directory does not exist."
+            echo "The failed run may have been cleaned up already."
+            exit 1
+          fi
+          ls -la output/
+          if [ ! -f "output/results.json" ]; then
+            echo "Error: output/results.json not found"
+            exit 1
+          fi
+          if [ ! -f "output/provenance.json" ]; then
+            echo "Error: output/provenance.json not found"
+            exit 1
+          fi
+          echo "output/results.json and output/provenance.json found."
+
       - name: Determine unique name
         id: naming
         run: |
@@ -28,45 +47,33 @@ jobs:
             UNIQUE_NAME="${{ github.event.inputs.unique_name }}"
             echo "Using provided unique name: $UNIQUE_NAME"
           else
-            # Auto-detect: pick the latest result file by modification time
-            LATEST=$(ls -t results/*.json 2>/dev/null | head -1)
-            if [ -z "$LATEST" ]; then
-              echo "Error: No result files found in results/"
-              ls results/ || echo "(empty)"
-              exit 1
-            fi
-            # Strip path and .json extension to get unique name
-            UNIQUE_NAME=$(basename "$LATEST" .json)
-            echo "Auto-detected latest result: $UNIQUE_NAME"
+            TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+            UNIQUE_NAME="${{ github.repository_owner }}-${TIMESTAMP}"
+            echo "Auto-generated unique name: $UNIQUE_NAME"
           fi
 
           BRANCH="submission-${UNIQUE_NAME}"
           echo "unique_name=$UNIQUE_NAME" >> $GITHUB_OUTPUT
           echo "branch_name=$BRANCH" >> $GITHUB_OUTPUT
 
-      - name: Verify result files exist
+      - name: Copy output files into submission paths
         run: |
           UNIQUE_NAME="${{ steps.naming.outputs.unique_name }}"
-          echo "Looking for files with unique name: $UNIQUE_NAME"
 
-          MISSING=0
-          for f in "results/${UNIQUE_NAME}.json" \
-                   "submissions/${UNIQUE_NAME}.toml" \
-                   "submissions/${UNIQUE_NAME}.provenance.json"; do
-            if [ ! -f "$f" ]; then
-              echo "Missing: $f"
-              MISSING=1
-            else
-              echo "Found: $f"
-            fi
-          done
+          cp output/results.json results/${UNIQUE_NAME}.json
+          cp output/provenance.json submissions/${UNIQUE_NAME}.provenance.json
 
-          if [ $MISSING -eq 1 ]; then
-            echo ""
-            echo "Available results:"
-            ls results/
+          # scenario.toml should already be in the repo root
+          if [ ! -f "scenario.toml" ]; then
+            echo "Error: scenario.toml not found in repo root"
             exit 1
           fi
+          cp scenario.toml submissions/${UNIQUE_NAME}.toml
+
+          echo "Files staged:"
+          echo "  results/${UNIQUE_NAME}.json"
+          echo "  submissions/${UNIQUE_NAME}.toml"
+          echo "  submissions/${UNIQUE_NAME}.provenance.json"
 
       - name: Determine target repository
         id: target
@@ -93,10 +100,6 @@ jobs:
       - name: Commit result files onto submission branch
         run: |
           UNIQUE_NAME="${{ steps.naming.outputs.unique_name }}"
-
-          git checkout main -- results/${UNIQUE_NAME}.json
-          git checkout main -- submissions/${UNIQUE_NAME}.toml
-          git checkout main -- submissions/${UNIQUE_NAME}.provenance.json
 
           git add results/${UNIQUE_NAME}.json \
                   submissions/${UNIQUE_NAME}.toml \
