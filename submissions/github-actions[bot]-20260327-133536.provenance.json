@@ -1,0 +1,17 @@
+{
+  "image_digests": {
+    "green-agent": "ghcr.io/rkstu/entropic-crmarena-green@sha256:f801c2584235faa0750eae35eeba494107919a59eb12bb4e53ede15e9ff620d3",
+    "agent": "ghcr.io/madgaa-lab/crm-agent-phase2_dev@sha256:75fabeb8168b0ba5a178f91e001ea0168365455d2d74faaf35d75770130fd995",
+    "agentbeats-client": "ghcr.io/agentbeats/agentbeats-client@sha256:13dfe3ef4e583a80e7ce2fe3becd0ce3b879841368a7f4fa40b6ebbabeeb014e"
+  },
+  "timestamp": "2026-03-27T04:56:21Z",
+  "github_actions": {
+    "run_url": "https://github.com/MadGAA-Lab/DeoGaze-agentbeats-leaderboard/actions/runs/23561546926",
+    "run_logs_url": "https://api.github.com/repos/MadGAA-Lab/DeoGaze-agentbeats-leaderboard/actions/runs/23561546926/logs",
+    "ref": "refs/heads/main",
+    "sha": "04cbb2eb6cd9911aa1b8f9c6f8bb8a0cd0476077",
+    "repository_url": "https://github.com/MadGAA-Lab/DeoGaze-agentbeats-leaderboard",
+    "workflow_ref": "MadGAA-Lab/DeoGaze-agentbeats-leaderboard/.github/workflows/run-scenario.yml@refs/heads/main",
+    "workflow_sha": "04cbb2eb6cd9911aa1b8f9c6f8bb8a0cd0476077"
+  }
+}
